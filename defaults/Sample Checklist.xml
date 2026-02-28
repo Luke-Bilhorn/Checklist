@@ -1,0 +1,39 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<checklist name="Sample Checklist" default_state="-1">
+  <states>
+    <state number="-1" label="Bullet" color="#bbbbbb" symbol="bullet"/>
+    <state number="0" label="To Do" color="#F44336" symbol="empty"/>
+    <state number="1" label="Done" color="#4CAF50" symbol="check"/>
+    <state number="2" label="Waiting" color="#9C27B0" symbol="clock"/>
+    <state number="3" label="On Hold" color="#FFC107" symbol="minus"/>
+    <state number="4" label="Cancelled" color="#757575" symbol="x"/>
+  </states>
+  <items>
+    <item id="2e58f81c" text="Regular Work" state="-1">
+      <item id="9561e3df" text="Project A" state="2">
+        <item id="c0889dce" text="Task 1" state="1"/>
+        <item id="0dd5dbc2" text="Task 2" state="1"/>
+        <item id="3995ee1d" text="Task 3 (Waiting for teammate)" state="2"/>
+      </item>
+      <item id="c7f3e4ab" text="Project B" state="0">
+        <item id="4e606507" text="A note about project B!" state="-1"/>
+        <item id="0c2dae96" text="More info." state="-1"/>
+        <item id="67e4efd4" text="This thing is done!" state="1"/>
+        <item id="c3341d00" text="This still needs to get done." state="0"/>
+        <item id="9dbc1871" text="So does this." state="0"/>
+      </item>
+      <item id="4ab5545b" text="This job is done" state="1"/>
+      <item id="d411d30b" text="Low priority backlog" state="3" collapsed="true">
+        <item id="69ad0273" text="Thing I could do but don't really need to" state="3"/>
+        <item id="3de62662" text="Thing to do when I have more time" state="3"/>
+        <item id="5208f001" text="Information about a thing." state="-1"/>
+      </item>
+    </item>
+    <item id="41bd26ab" text="Other projcet" state="2">
+      <item id="a742a7af" text="This has some information." state="-1"/>
+      <item id="340d4380" text="I need to ask for more information." state="0"/>
+      <item id="74df5554" text="I'm waiting on something before getting started." state="2"/>
+    </item>
+    <item id="6e6e455a" text="Buy bread TODAY" state="0"/>
+  </items>
+</checklist>

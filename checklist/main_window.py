@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import math
+from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
@@ -31,9 +30,8 @@ from .models import Checklist
 from .sidebar import SidebarView
 from .state_editor import StateEditor
 from .theme import sidebar_qss
+from .paths import get_data_dir
 from .xml_io import list_checklists, load_checklist, save_checklist
-
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 _ACTIVITY_W = 44
 
@@ -475,7 +473,7 @@ class MainWindow(QMainWindow):
     # -- sidebar -----------------------------------------------------------
 
     def _refresh_sidebar(self):
-        paths = list_checklists(DATA_DIR)
+        paths = list_checklists(get_data_dir())
         self._sidebar_view.load_paths(paths, self._current_path)
 
     def _on_checklist_selected(self, path: Path):
@@ -520,10 +518,10 @@ class MainWindow(QMainWindow):
 
     def _on_pending_committed(self, card, name: str):
         safe = "".join(c if c.isalnum() or c in " _-" else "_" for c in name)
-        path = DATA_DIR / (safe + ".xml")
+        path = get_data_dir() / (safe + ".xml")
         i = 1
         while path.exists():
-            path = DATA_DIR / (safe + f"_{i}.xml")
+            path = get_data_dir() / (safe + f"_{i}.xml")
             i += 1
         cl = Checklist(name=name)
         save_checklist(cl, path)
