@@ -69,9 +69,7 @@ exe = EXE(
     strip=False,
     upx=True,
     console=False,
-    # Uncomment and set path once you have an icon:
-    # icon="assets/icon.icns",   # macOS
-    # icon="assets/icon.ico",    # Windows
+    icon="assets/icon.icns",
 )
 
 coll = COLLECT(
@@ -88,8 +86,7 @@ if platform.system() == "Darwin":
     app = BUNDLE(
         coll,
         name="Checklist.app",
-        # Uncomment once you have an icon:
-        # icon="assets/icon.icns",
+        icon="assets/icon.icns",
         bundle_identifier="com.frnd.checklist",
         info_plist={
             "CFBundleDisplayName": "Checklist",
