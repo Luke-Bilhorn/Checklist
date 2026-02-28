@@ -4,13 +4,12 @@ from PySide6.QtCore import QEvent, QTimer, Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QHBoxLayout,
-    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
-from .item_widget import ChecklistItemWidget
+from .item_widget import AddItemCard, ChecklistItemWidget
 from .models import Checklist, ChecklistItem, _short_id
 from .theme import ACCENT, BORDER, MIME_ITEM, TEXT_MUTED
 
@@ -59,13 +58,7 @@ class ChecklistView(QScrollArea):
         self._layout.setContentsMargins(16, 16, 16, 16)
         self._layout.setSpacing(6)
 
-        self._add_btn = QPushButton("+ Add item")
-        self._add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._add_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: 1px dashed #d0d0d0;"
-            " border-radius: 6px; padding: 8px; color: #aaaaaa; font-size: 13px; }"
-            " QPushButton:hover { border-color: #999; color: #666; }"
-        )
+        self._add_btn = AddItemCard()
         self._add_btn.clicked.connect(self._add_top_level)
         self._layout.addWidget(self._add_btn)
 
@@ -101,6 +94,7 @@ class ChecklistView(QScrollArea):
                 w = self._create_widget(mi)
                 self._layout.insertWidget(self._item_insert_index(), w)
 
+        self._add_btn.update_from_checklist(self._checklist)
         self._layout.addWidget(self._add_btn)
         self._layout.addStretch()
 
@@ -109,7 +103,10 @@ class ChecklistView(QScrollArea):
         return idx if idx >= 0 else self._layout.count()
 
     def _create_widget(self, mi: ChecklistItem) -> ChecklistItemWidget:
-        w = ChecklistItemWidget(mi.id, mi.text, mi.state_id, self._checklist, self._content)
+        w = ChecklistItemWidget(
+            mi.id, mi.text, mi.state_number, mi.collapsed,
+            self._checklist, self._content,
+        )
         w.changed.connect(self._schedule_save)
         w.enter_pressed.connect(self._on_enter)
         w.delete_requested.connect(self._on_delete)
@@ -117,6 +114,7 @@ class ChecklistView(QScrollArea):
         for child_mi in mi.children:
             cw = self._create_widget(child_mi)
             w.children_layout.addWidget(cw)
+        w.update_collapse_visibility()
         return w
 
     # -- model extraction --------------------------------------------------
@@ -136,15 +134,19 @@ class ChecklistView(QScrollArea):
             if isinstance(cw, ChecklistItemWidget):
                 children.append(self._widget_to_model(cw))
         return ChecklistItem(
-            id=w.item_id, text=w.text(), state_id=w.state_id, children=children,
+            id=w.item_id, text=w.text(), state_number=w.state_number,
+            collapsed=w.collapsed, children=children,
         )
 
     # -- add / delete ------------------------------------------------------
 
+    def _default_state(self) -> int:
+        return self._checklist.default_state_number if self._checklist else 0
+
     def _add_top_level(self):
         if not self._checklist:
             return
-        mi = ChecklistItem(id=_short_id(), text="", state_id="todo")
+        mi = ChecklistItem(id=_short_id(), text="", state_number=self._default_state())
         w = self._create_widget(mi)
         idx = self._item_insert_index()
         self._layout.insertWidget(idx, w)
@@ -154,7 +156,7 @@ class ChecklistView(QScrollArea):
     def _on_enter(self, ref_widget: ChecklistItemWidget):
         if not self._checklist:
             return
-        mi = ChecklistItem(id=_short_id(), text="", state_id="todo")
+        mi = ChecklistItem(id=_short_id(), text="", state_number=self._default_state())
         w = self._create_widget(mi)
         parent_layout = self._parent_layout_of(ref_widget)
         if parent_layout is None:
@@ -170,9 +172,10 @@ class ChecklistView(QScrollArea):
     def _on_add_child(self, parent_widget: ChecklistItemWidget):
         if not self._checklist:
             return
-        mi = ChecklistItem(id=_short_id(), text="", state_id="todo")
+        mi = ChecklistItem(id=_short_id(), text="", state_number=self._default_state())
         w = self._create_widget(mi)
         parent_widget.children_layout.addWidget(w)
+        parent_widget.update_collapse_visibility()
         w.focus_text()
         self._schedule_save()
 
@@ -180,9 +183,14 @@ class ChecklistView(QScrollArea):
         parent_layout = self._parent_layout_of(widget)
         if parent_layout is None:
             return
+        parent_w = widget.parentWidget()
         parent_layout.removeWidget(widget)
         widget.setParent(None)
         widget.deleteLater()
+        if parent_w:
+            gp = parent_w.parentWidget()
+            if isinstance(gp, ChecklistItemWidget):
+                gp.update_collapse_visibility()
         self._schedule_save()
 
     # -- indent / outdent --------------------------------------------------
@@ -344,3 +352,4 @@ class ChecklistView(QScrollArea):
             w = self._layout.itemAt(i).widget()
             if isinstance(w, ChecklistItemWidget):
                 w.refresh_colors()
+        self._add_btn.update_from_checklist(self._checklist)
