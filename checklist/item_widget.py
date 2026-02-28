@@ -379,6 +379,67 @@ class _AddChildButton(_TintedButton):
         p.end()
 
 
+class _DeleteButton(_TintedButton):
+    """Trash can icon button — geometric, red icon."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setToolTip("Delete")
+
+    def paintEvent(self, ev):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self._paint_hover_bg(p)
+        col = QColor("#cc4444") if not self.underMouse() else QColor("#aa2222")
+        pen = QPen(col, 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        cx, cy = self.width() / 2, self.height() / 2
+        # lid: horizontal line with small knob
+        lid_y = cy - 5
+        p.drawLine(QPointF(cx - 6, lid_y), QPointF(cx + 6, lid_y))
+        p.drawLine(QPointF(cx - 2, lid_y), QPointF(cx - 2, lid_y - 2.5))
+        p.drawLine(QPointF(cx - 2, lid_y - 2.5), QPointF(cx + 2, lid_y - 2.5))
+        p.drawLine(QPointF(cx + 2, lid_y - 2.5), QPointF(cx + 2, lid_y))
+        # can body: tapered trapezoid
+        top_y = lid_y + 1.5
+        bot_y = cy + 7
+        p.drawLine(QPointF(cx - 5, top_y), QPointF(cx - 4, bot_y))
+        p.drawLine(QPointF(cx - 4, bot_y), QPointF(cx + 4, bot_y))
+        p.drawLine(QPointF(cx + 4, bot_y), QPointF(cx + 5, top_y))
+        # vertical lines inside
+        for dx in (-1.5, 1.5):
+            p.drawLine(QPointF(cx + dx, top_y + 2), QPointF(cx + dx, bot_y - 1.5))
+        p.end()
+
+
+class _AddSiblingButton(_TintedButton):
+    """Add-sibling icon: small rectangle with a + below it."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setToolTip("Add sibling")
+
+    def paintEvent(self, ev):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self._paint_hover_bg(p)
+        col = QColor("#aaaaaa") if not self.underMouse() else QColor("#666666")
+        pen = QPen(col, 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        cx, cy = self.width() / 2, self.height() / 2
+        # small rectangle (existing item)
+        rw, rh = 8, 4
+        p.drawRoundedRect(QRectF(cx - rw, cy - 6, rw * 2, rh), 1.5, 1.5)
+        # plus sign below
+        plus_y = cy + 4
+        arm = 3.5
+        p.drawLine(QPointF(cx - arm, plus_y), QPointF(cx + arm, plus_y))
+        p.drawLine(QPointF(cx, plus_y - arm), QPointF(cx, plus_y + arm))
+        p.end()
+
+
 # ---------------------------------------------------------------------------
 # Options row (toggled by C)
 # ---------------------------------------------------------------------------
@@ -391,7 +452,7 @@ class _OptionsRow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._layout = QHBoxLayout(self)
-        self._layout.setContentsMargins(BTN_SIZE + 16 + SPACING, 4, 10, 6)
+        self._layout.setContentsMargins(BTN_SIZE + 16 + SPACING, 4, 0, 6)
         self._layout.setSpacing(4)
 
     def rebuild(self, checklist: Checklist, current_state: int):
@@ -420,23 +481,11 @@ class _OptionsRow(QWidget):
 
         self._layout.addStretch()
 
-        sib_btn = QPushButton("Add Sibling")
-        sib_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        sib_btn.setStyleSheet(
-            "QPushButton { background: #f5f5f5; border: 1px solid #ddd;"
-            " border-radius: 4px; padding: 4px 10px; color: #555; font-size: 11px; }"
-            " QPushButton:hover { background: #eee; border-color: #bbb; }"
-        )
+        sib_btn = _AddSiblingButton()
         sib_btn.clicked.connect(self.add_sibling.emit)
         self._layout.addWidget(sib_btn)
 
-        del_btn = QPushButton("Delete")
-        del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        del_btn.setStyleSheet(
-            "QPushButton { background: #f5f5f5; border: 1px solid #ddd;"
-            " border-radius: 4px; padding: 4px 10px; color: #c44; font-size: 11px; }"
-            " QPushButton:hover { background: #fee; border-color: #c88; }"
-        )
+        del_btn = _DeleteButton()
         del_btn.clicked.connect(self.delete_item.emit)
         self._layout.addWidget(del_btn)
 
@@ -513,7 +562,7 @@ class ChecklistItemWidget(QFrame):
 
         # E - add child
         self._add_btn = _AddChildButton(self)
-        self._add_btn.clicked.connect(lambda: self.add_child_requested.emit(self))
+        self._add_btn.clicked.connect(self._on_add_child_click)
         header.addWidget(self._add_btn, 0, Qt.AlignmentFlag.AlignTop)
 
         main.addLayout(header)
@@ -638,6 +687,15 @@ class ChecklistItemWidget(QFrame):
         if self._options_open and self._checklist:
             self._opts_row.rebuild(self._checklist, self.state_number)
         self._opts_row.setVisible(self._options_open)
+
+    # -- add child ---------------------------------------------------------
+
+    def _on_add_child_click(self):
+        if self._collapsed and self.child_count() > 0:
+            self._collapsed = False
+            self._sync_collapse()
+            self.changed.emit()
+        self.add_child_requested.emit(self)
 
     # -- collapse / expand -------------------------------------------------
 

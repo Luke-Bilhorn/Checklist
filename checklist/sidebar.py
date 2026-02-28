@@ -16,7 +16,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .item_widget import BTN_SIZE, GRIP_W, SPACING, _DragGrip, _OptionsToggle
+from .item_widget import (
+    BTN_SIZE, GRIP_W, SPACING,
+    _DeleteButton, _DragGrip, _OptionsToggle, _TintedButton,
+)
 from .theme import ACCENT, blend_with_bg
 
 MIME_SIDEBAR = "application/x-checklist-sidebar"
@@ -26,16 +29,59 @@ _ACTIVE_COLOR = "#888888"
 
 
 # ---------------------------------------------------------------------------
+# Settings gear button — same styling as other small square icon buttons
+# ---------------------------------------------------------------------------
+
+class _SettingsButton(_TintedButton):
+    """Small gear icon for opening settings."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setToolTip("Edit states")
+
+    def paintEvent(self, ev):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self._paint_hover_bg(p)
+        col = QColor("#aaaaaa") if not self.underMouse() else QColor("#666666")
+        p.setPen(QPen(col, 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        cx, cy = self.width() / 2, self.height() / 2
+        import math
+        # outer gear teeth
+        r_out, r_in = 9.0, 6.5
+        teeth = 8
+        path = QPainterPath()
+        for i in range(teeth):
+            a1 = math.radians(i * 360 / teeth - 12)
+            a2 = math.radians(i * 360 / teeth + 12)
+            a3 = math.radians((i + 0.5) * 360 / teeth - 12)
+            a4 = math.radians((i + 0.5) * 360 / teeth + 12)
+            if i == 0:
+                path.moveTo(cx + r_out * math.cos(a1), cy + r_out * math.sin(a1))
+            else:
+                path.lineTo(cx + r_out * math.cos(a1), cy + r_out * math.sin(a1))
+            path.lineTo(cx + r_out * math.cos(a2), cy + r_out * math.sin(a2))
+            path.lineTo(cx + r_in * math.cos(a3), cy + r_in * math.sin(a3))
+            path.lineTo(cx + r_in * math.cos(a4), cy + r_in * math.sin(a4))
+        path.closeSubpath()
+        p.drawPath(path)
+        # inner circle
+        p.drawEllipse(QPointF(cx, cy), 3.0, 3.0)
+        p.end()
+
+
+# ---------------------------------------------------------------------------
 # Individual checklist card in the sidebar
 # ---------------------------------------------------------------------------
 
 class SidebarListCard(QFrame):
-    selected = Signal(object)                   # emits self
-    delete_requested = Signal(object)           # emits self
-    rename_requested = Signal(object, str)      # emits self, new_name
-    # for brand-new cards (no backing file yet)
-    new_committed = Signal(object, str)         # emits self, name
-    new_cancelled = Signal(object)              # emits self
+    selected = Signal(object)
+    delete_requested = Signal(object)
+    rename_requested = Signal(object, str)
+    settings_requested = Signal(object)
+    new_committed = Signal(object, str)
+    new_cancelled = Signal(object)
 
     def __init__(self, path: Path, name: str, parent=None, is_new: bool = False):
         super().__init__(parent)
@@ -53,7 +99,7 @@ class SidebarListCard(QFrame):
         main.setContentsMargins(10, 6, 6, 6)
         main.setSpacing(0)
 
-        # ---- header: grip | name label | opts toggle ----
+        # ---- header: grip | label/edit | opts toggle ----
         header = QHBoxLayout()
         header.setSpacing(SPACING)
 
@@ -61,13 +107,29 @@ class SidebarListCard(QFrame):
         self._grip.drag_requested.connect(self._start_drag)
         self._grip.set_item_color(_FILL)
         header.addWidget(self._grip, 0, Qt.AlignmentFlag.AlignTop)
+        header.addSpacing(4)
 
+        # Name label (shown when options closed)
         self._label = QLabel(name if not is_new else "")
         self._label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self._label.setStyleSheet(
             "QLabel { color: #333333; font-size: 13px; background: transparent; }"
         )
         header.addWidget(self._label, 1)
+
+        # Inline name edit (shown when options open)
+        self._name_edit = QLineEdit(name)
+        self._name_edit.setFixedHeight(BTN_SIZE)
+        self._name_edit.setPlaceholderText("Checklist name…")
+        self._name_edit.setStyleSheet(
+            "QLineEdit { background: rgba(0,0,0,0.06); border: 1px solid #d8d8d8;"
+            " border-radius: 4px; padding: 7px 6px; color: #333; font-size: 13px; }"
+            " QLineEdit:focus { background: rgba(0,0,0,0.06);"
+            " border-color: #bbb; }"
+        )
+        self._name_edit.returnPressed.connect(self._commit)
+        self._name_edit.setVisible(is_new)
+        header.addWidget(self._name_edit, 1)
 
         self._opt_toggle = _OptionsToggle(self)
         self._opt_toggle.set_item_color(_FILL)
@@ -76,29 +138,22 @@ class SidebarListCard(QFrame):
 
         main.addLayout(header)
 
-        # ---- options row ----
+        # ---- options row: settings + delete buttons ----
         self._opts_widget = QWidget()
         opts_lay = QHBoxLayout(self._opts_widget)
-        opts_lay.setContentsMargins(GRIP_W + SPACING, 4, 6, 6)
-        opts_lay.setSpacing(6)
+        opts_lay.setContentsMargins(GRIP_W + SPACING, 4, 0, 4)
+        opts_lay.setSpacing(4)
 
-        self._name_edit = QLineEdit(name)
-        self._name_edit.setPlaceholderText("Checklist name…")
-        self._name_edit.setStyleSheet(
-            "QLineEdit { background: #fff; border: 1px solid #ddd; border-radius: 4px;"
-            " padding: 3px 6px; color: #333; font-size: 12px; }"
-            " QLineEdit:focus { border-color: #aaa; }"
-        )
-        self._name_edit.returnPressed.connect(self._commit)
-        opts_lay.addWidget(self._name_edit, 1)
+        opts_lay.addStretch()
 
-        self._del_btn = QPushButton("Delete")
-        self._del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._del_btn.setStyleSheet(
-            "QPushButton { background: #f5f5f5; border: 1px solid #ddd;"
-            " border-radius: 4px; padding: 3px 10px; color: #c44; font-size: 11px; }"
-            " QPushButton:hover { background: #fee; border-color: #c88; }"
-        )
+        self._settings_btn = _SettingsButton(self)
+        self._settings_btn.set_item_color(_FILL)
+        self._settings_btn.clicked.connect(lambda: self.settings_requested.emit(self))
+        self._settings_btn.setVisible(not is_new)
+        opts_lay.addWidget(self._settings_btn)
+
+        self._del_btn = _DeleteButton(self)
+        self._del_btn.set_item_color(_FILL)
         self._del_btn.clicked.connect(lambda: self.delete_requested.emit(self))
         self._del_btn.setVisible(not is_new)
         opts_lay.addWidget(self._del_btn)
@@ -119,6 +174,7 @@ class SidebarListCard(QFrame):
 
         if is_new:
             self._options_open = True
+            self._label.setVisible(False)
             QTimer.singleShot(50, self._focus_edit)
 
     def _focus_edit(self):
@@ -148,11 +204,13 @@ class SidebarListCard(QFrame):
         self.update()
 
     def finalize_new(self, path: Path, name: str):
-        """Convert a pending new card into a real card after file is created."""
         self._is_new = False
         self._path = path
         self.set_name(name)
+        self._label.setVisible(True)
+        self._name_edit.setVisible(False)
         self._del_btn.setVisible(True)
+        self._settings_btn.setVisible(True)
         self._cancel_btn.setVisible(False)
         self._options_open = False
         self._opts_widget.setVisible(False)
@@ -163,7 +221,12 @@ class SidebarListCard(QFrame):
         self._options_open = not self._options_open
         if self._options_open:
             self._name_edit.setText(self._name)
+            self._label.setVisible(False)
+            self._name_edit.setVisible(True)
             QTimer.singleShot(50, self._focus_edit)
+        else:
+            self._label.setVisible(True)
+            self._name_edit.setVisible(False)
         self._opts_widget.setVisible(self._options_open)
 
     def _commit(self):
@@ -178,6 +241,8 @@ class SidebarListCard(QFrame):
                 self.rename_requested.emit(self, new_name)
             self._options_open = False
             self._opts_widget.setVisible(False)
+            self._label.setVisible(True)
+            self._name_edit.setVisible(False)
 
     # -- painting ----------------------------------------------------------
 
@@ -219,6 +284,8 @@ class SidebarListCard(QFrame):
             else:
                 self._options_open = False
                 self._opts_widget.setVisible(False)
+                self._label.setVisible(True)
+                self._name_edit.setVisible(False)
         else:
             super().keyPressEvent(ev)
 
@@ -335,14 +402,15 @@ class AddListCard(QFrame):
 
 
 # ---------------------------------------------------------------------------
-# Sidebar scroll view — holds all cards + add-list card
+# Sidebar scroll view
 # ---------------------------------------------------------------------------
 
 class SidebarView(QScrollArea):
-    checklist_selected = Signal(object)         # Path
-    checklist_deleted = Signal(object)          # Path
-    checklist_renamed = Signal(object, str)     # Path, new_name
-    pending_committed = Signal(object, str)     # card, name  (new card committed)
+    checklist_selected = Signal(object)
+    checklist_deleted = Signal(object)
+    checklist_renamed = Signal(object, str)
+    settings_requested = Signal(object)      # Path
+    pending_committed = Signal(object, str)
     add_requested = Signal()
 
     def __init__(self, parent=None):
@@ -389,7 +457,6 @@ class SidebarView(QScrollArea):
         return self._make_card(p, name)
 
     def start_new_card(self) -> SidebarListCard:
-        """Insert a pending card with empty name field ready for typing."""
         card = SidebarListCard(Path("__pending__"), "", self._content, is_new=True)
         card.new_committed.connect(self._on_new_committed)
         card.new_cancelled.connect(self._on_new_cancelled)
@@ -444,13 +511,17 @@ class SidebarView(QScrollArea):
             except Exception:
                 name = p.stem
         card = SidebarListCard(p, name, self._content)
-        card.selected.connect(self._on_selected)
-        card.delete_requested.connect(self._on_delete)
-        card.rename_requested.connect(self._on_rename)
+        self._connect_card(card)
         insert_idx = self._layout.indexOf(self._add_card)
         self._layout.insertWidget(insert_idx, card)
         self._cards.append(card)
         return card
+
+    def _connect_card(self, card: SidebarListCard):
+        card.selected.connect(self._on_selected)
+        card.delete_requested.connect(self._on_delete)
+        card.rename_requested.connect(self._on_rename)
+        card.settings_requested.connect(self._on_settings)
 
     def _on_selected(self, card: SidebarListCard):
         self.set_active(card.path)
@@ -462,7 +533,11 @@ class SidebarView(QScrollArea):
     def _on_rename(self, card: SidebarListCard, new_name: str):
         self.checklist_renamed.emit(card.path, new_name)
 
+    def _on_settings(self, card: SidebarListCard):
+        self.settings_requested.emit(card.path)
+
     def _on_new_committed(self, card: SidebarListCard, name: str):
+        self._connect_card(card)
         self.pending_committed.emit(card, name)
 
     def _on_new_cancelled(self, card: SidebarListCard):

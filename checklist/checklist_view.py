@@ -4,6 +4,7 @@ from PySide6.QtCore import QEvent, QTimer, Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QHBoxLayout,
+    QLabel,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -12,6 +13,11 @@ from PySide6.QtWidgets import (
 from .item_widget import AddItemCard, ChecklistItemWidget
 from .models import Checklist, ChecklistItem, _short_id
 from .theme import ACCENT, BORDER, MIME_ITEM, TEXT_MUTED
+
+_TITLE_SS = (
+    "QLabel { font-size: 22px; font-weight: 700; color: #222;"
+    " background: transparent; padding: 4px 0 8px 0; }"
+)
 
 
 class _ContentWidget(QWidget):
@@ -58,6 +64,12 @@ class ChecklistView(QScrollArea):
         self._layout.setContentsMargins(16, 16, 16, 16)
         self._layout.setSpacing(6)
 
+        self._title_label = QLabel()
+        self._title_label.setStyleSheet(_TITLE_SS)
+        self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._title_label.setVisible(False)
+        self._layout.addWidget(self._title_label)
+
         self._add_btn = AddItemCard()
         self._add_btn.clicked.connect(self._add_top_level)
         self._layout.addWidget(self._add_btn)
@@ -69,9 +81,16 @@ class ChecklistView(QScrollArea):
         self._save_timer.setInterval(400)
         self._save_timer.timeout.connect(lambda: self.changed.emit())
 
+    def set_max_item_width(self, width: int):
+        self._content.setMaximumWidth(width)
+
     @property
     def checklist(self) -> Checklist | None:
         return self._checklist
+
+    def set_title(self, name: str):
+        self._title_label.setText(name)
+        self._title_label.setVisible(bool(name))
 
     # -- load / rebuild ----------------------------------------------------
 
@@ -80,14 +99,17 @@ class ChecklistView(QScrollArea):
         self._rebuild()
 
     def _rebuild(self):
+        keep = {self._add_btn, self._title_label}
         while True:
             item = self._layout.takeAt(0)
             if item is None:
                 break
             w = item.widget()
-            if w and w is not self._add_btn:
+            if w and w not in keep:
                 w.setParent(None)
                 w.deleteLater()
+
+        self._layout.addWidget(self._title_label)
 
         if self._checklist:
             for mi in self._checklist.items:

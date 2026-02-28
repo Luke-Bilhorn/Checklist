@@ -54,7 +54,8 @@ def sidebar_qss() -> str:
     return (
         "QWidget#sidebar { background-color: #f7f7f7; }"
         " QLabel#sidebarTitle { font-weight: 600; font-size: 10px; color: #8a8a8a;"
-        " padding: 14px 12px 6px 12px; letter-spacing: 1.2px; }"
+        " padding: 14px 12px 6px 12px; letter-spacing: 1.2px;"
+        " qproperty-alignment: AlignCenter; }"
         " QListWidget { background-color: #f7f7f7; border: none;"
         " outline: none; padding: 2px 6px; }"
         " QListWidget::item { padding: 7px 10px; border-radius: 6px;"
